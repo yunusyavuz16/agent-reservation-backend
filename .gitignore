@@ -77,6 +77,7 @@ ScaffoldingReadMe.txt
 # Local appsettings
 appsettings.Development.json
 appsettings.Local.json
+appsettings.json
 
 # macOS
 .DS_Store
