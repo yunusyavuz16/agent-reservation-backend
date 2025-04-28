@@ -95,6 +95,82 @@ public class ReservationController : ControllerBase
         return reservations;
     }
 
+    // GET: api/Reservation/upcoming
+    [Authorize]
+    [HttpGet("upcoming")]
+    public async Task<ActionResult<IEnumerable<ReservationDto>>> GetUpcomingReservations()
+    {
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        var query = _context.Reservations
+            .Include(r => r.Resource)
+            .Include(r => r.User)
+            .Include(r => r.PaymentDetails)
+            .Include(r => r.Reviews)
+            .Where(r => r.StartTime > DateTime.UtcNow);
+
+        // Eğer admin değilse, sadece kendi rezervasyonlarını görebilir
+        if (!User.IsInRole("Admin"))
+        {
+            query = query.Where(r => r.UserId == userId);
+        }
+
+        var reservations = await query
+            .Select(r => new ReservationDto
+            {
+                Id = r.Id,
+                StartTime = r.StartTime,
+                EndTime = r.EndTime,
+                Description = r.Description,
+                ResourceId = r.ResourceId,
+                ResourceName = r.Resource != null ? r.Resource.Name : string.Empty,
+                UserId = r.UserId,
+                UserName = r.User != null ? $"{r.User.FirstName} {r.User.LastName}" : string.Empty,
+                CreatedAt = r.CreatedAt,
+                Attendees = r.Attendees,
+                IsRecurring = r.IsRecurring,
+                RecurrencePattern = r.RecurrencePattern,
+                RecurrenceInterval = r.RecurrenceInterval,
+                RecurrenceEndDate = r.RecurrenceEndDate,
+                Status = r.Status,
+                IsPaid = r.IsPaid,
+                Price = r.Price,
+                PaymentDetails = r.PaymentDetails != null ? new PaymentDetailsDto
+                {
+                    Id = r.PaymentDetails.Id,
+                    ReservationId = r.PaymentDetails.ReservationId,
+                    Amount = r.PaymentDetails.Amount,
+                    Currency = r.PaymentDetails.Currency,
+                    Status = r.PaymentDetails.Status,
+                    TransactionId = r.PaymentDetails.TransactionId,
+                    PaymentMethod = r.PaymentDetails.PaymentMethod,
+                    CreatedAt = r.PaymentDetails.CreatedAt,
+                    UpdatedAt = r.PaymentDetails.UpdatedAt
+                } : null,
+                Reviews = r.Reviews.Select(review => new ReviewDto
+                {
+                    Id = review.Id,
+                    ReservationId = review.ReservationId,
+                    UserId = review.UserId,
+                    UserName = review.User != null ? $"{review.User.FirstName} {review.User.LastName}" : string.Empty,
+                    Rating = review.Rating,
+                    Comment = review.Comment,
+                    CreatedAt = review.CreatedAt,
+                    UpdatedAt = review.UpdatedAt,
+                    ResourceId = r.ResourceId,
+                    ResourceName = r.Resource != null ? r.Resource.Name : string.Empty
+                }).ToList(),
+                AverageRating = r.Reviews.Any() ? r.Reviews.Average(rv => rv.Rating) : null,
+                ResourceCapacity = r.Resource != null ? r.Resource.Capacity : 0,
+                ResourceImageUrl = r.Resource != null ? r.Resource.ImageUrl : null,
+                ResourceLocation = r.Resource != null ? r.Resource.Location : null
+            })
+            .OrderBy(r => r.StartTime)
+            .ToListAsync();
+
+        return reservations;
+    }
+
     // GET: api/Reservation/5
     [HttpGet("{id}")]
     public async Task<ActionResult<ReservationDto>> GetReservation(int id)
